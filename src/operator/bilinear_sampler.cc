@@ -175,10 +175,10 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
           int top_left_x = static_cast<int>(floor(x_fake));
           DType top_left_y_w = 1.0 - (y_fake - top_left_y);
           DType top_left_x_w = 1.0 - (x_fake - top_left_x);
-          index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
           if (between(x_fake, 0, i_w-1) && between(y_fake, 0, i_h-1)){
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               // calc 4 vertex value in input data
               DType top_left_v = 0;
               DType top_right_v = 0;
@@ -229,6 +229,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + 0;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               // calc input grad
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index); 
@@ -243,6 +244,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
           else if (x_fake >= (i_w -1)  &&  y_fake <= 0){
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + i_w -1 ;
               // calc input grad
               if (data_req != mxnet::kNullOp) {
@@ -258,6 +260,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
           else if (x_fake >= (i_w -1)  &&  y_fake >=(i_h -1)){
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1) * i_w + i_w -1 ;
               // calc input grad
               if (data_req != mxnet::kNullOp) {
@@ -274,6 +277,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1 ) * i_w + 0;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               // calc input grad
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index) ;
@@ -292,6 +296,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             DType top_left_y_w = 1.0 - (y_fake - top_left_y);
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w ;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index)*( top_left_y_w) ;
                 *(g_input + data_index+ i_w) += *(grad + grad_index)*( 1.0 - top_left_y_w) ;
@@ -310,6 +315,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             DType top_left_x_w = 1.0 - (x_fake - top_left_x);
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index)*( top_left_x_w) ;
                 *(g_input + data_index+ 1) += *(grad + grad_index)*( 1.0 - top_left_x_w) ;
@@ -331,6 +337,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index)*( top_left_y_w) ;
                 *(g_input + data_index+ i_w) += *(grad + grad_index)*( 1.0 - top_left_y_w) ;
@@ -351,6 +358,7 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
             //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
             for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
               int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+              index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
               if (data_req != mxnet::kNullOp) {
                 *(g_input + data_index) += *(grad + grad_index)*( top_left_x_w) ;
                 *(g_input + data_index+ 1) += *(grad + grad_index)*( 1.0 - top_left_x_w) ;
