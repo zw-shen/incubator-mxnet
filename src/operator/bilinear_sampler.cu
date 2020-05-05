@@ -53,29 +53,99 @@ __global__ void BilinearSamplerForwardKernel(const int i_c, const int i_h,
     int n = index / o_w / o_h / o_c;
     int out_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
     int grid_index = n * o_h * o_w * 2 + h * o_w + w;
-    DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h - 1) / 2;
-    DType x_real = (*(grid + grid_index) + 1) * (i_w - 1) / 2;
-    int top_left_y = static_cast<int>(floor(y_real));
-    int top_left_x = static_cast<int>(floor(x_real));
-    DType top_left_y_w = 1.0 - (y_real - top_left_y);
-    DType top_left_x_w = 1.0 - (x_real - top_left_x);
-    int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
-    DType top_left_v = 0;
-    DType top_right_v = 0;
-    DType bottom_left_v = 0;
-    DType bottom_right_v = 0;
-    if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1))
-      top_left_v = *(data + data_index);
-    if (between(top_left_x + 1, 0, i_w-1) && between(top_left_y, 0, i_h-1))
-      top_right_v = *(data + data_index + 1);
-    if (between(top_left_x, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
-      bottom_left_v = *(data + data_index + i_w);
-    if (between(top_left_x+1, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
-      bottom_right_v = *(data + data_index + i_w + 1);
-    *(out+out_index) = top_left_v * top_left_y_w * top_left_x_w +
-                        top_right_v * top_left_y_w * (1.0 - top_left_x_w) +
-                        bottom_left_v * (1.0 - top_left_y_w) * top_left_x_w +
-                        bottom_right_v * (1.0 - top_left_y_w) * (1.0 - top_left_x_w);
+
+    // x y real between 0 w or h
+    DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h ) / 2;
+    DType x_real = (*(grid + grid_index) + 1) * (i_w ) / 2;
+    DType y_fake = y_real - 0.5;
+    DType x_fake = x_real - 0.5;
+    // x real >=0.5 and <= w-0.5
+    if (between(x_fake, 0, i_w-1) && between(y_fake, 0, i_h-1)){
+      int top_left_y = static_cast<int>(floor(y_fake));
+      int top_left_x = static_cast<int>(floor(x_fake));
+      DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+      DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +
+        top_left_y * i_w + top_left_x;
+      DType top_left_v = 0;
+      DType top_right_v = 0;
+      DType bottom_left_v = 0;
+      DType bottom_right_v = 0;
+      if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1))
+        top_left_v = *(data + data_index);
+      if (between(top_left_x + 1, 0, i_w-1) && between(top_left_y, 0, i_h-1))
+        top_right_v = *(data + data_index + 1);
+      if (between(top_left_x, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
+        bottom_left_v = *(data + data_index + i_w);
+      if (between(top_left_x+1, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
+        bottom_right_v = *(data + data_index + i_w + 1);
+      *(out+out_index) = top_left_v * top_left_y_w * top_left_x_w +
+                          top_right_v * top_left_y_w * (1.0 - top_left_x_w) +
+                          bottom_left_v * (1.0 - top_left_y_w) * top_left_x_w +
+                          bottom_right_v * (1.0 - top_left_y_w) * (1.0 - top_left_x_w); 
+    }
+    else if (x_fake <= 0  &&  y_fake <= 0){
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + 0;
+      *(out+out_index) = *(data + data_index); 
+    }
+    else if (x_fake >= (i_w -1)  &&  y_fake <= 0){
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + i_w -1 ;
+      *(out+out_index) = *(data + data_index) ;
+    }
+    else if (x_fake >= (i_w -1)  &&  y_fake >=(i_h -1)){
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1) * i_w + i_w -1 ;
+      *(out+out_index) = *(data + data_index) ;
+    }
+    else if (x_fake <= 0  &&  y_fake >=(i_h - 1 )){
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1 ) * i_w + 0;
+      *(out+out_index) = *(data + data_index) ;
+    }
+    else if (x_fake <= 0  ){
+      DType top_right_v = 0;
+      DType bottom_right_v = 0;
+      int top_left_y = static_cast<int>(floor(y_fake));
+      DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +
+        top_left_y * i_w ;
+      top_right_v = *(data + data_index );
+      bottom_right_v = *(data + data_index + i_w );
+      *(out+out_index) = top_right_v * ( top_left_y_w) +bottom_right_v * (1.0 - top_left_y_w); 
+    }
+    else if (y_fake <= 0  ){
+      DType bottom_left_v = 0;
+      DType bottom_right_v = 0;
+      int top_left_x = static_cast<int>(floor(x_fake));
+      DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_x;
+      bottom_left_v = *(data + data_index );
+      bottom_right_v = *(data + data_index  + 1);
+      *(out+out_index) =  bottom_left_v*(top_left_x_w) + bottom_right_v *(1.0 - top_left_x_w);
+    }
+    else if (x_fake >= i_w -1  ){
+      DType top_left_v = 0;
+      DType bottom_left_v = 0;
+      int top_left_y = static_cast<int>(floor(y_fake));
+      int top_left_x = static_cast<int>(floor(x_fake));
+      DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+      //right = left
+      //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+      top_left_v = *(data + data_index );
+      bottom_left_v = *(data + data_index  + i_w);
+      *(out+out_index) =  bottom_left_v*(1.0 - top_left_y_w) + top_left_v * ( top_left_y_w);
+    }
+    else if (y_fake >= i_h -1  ){
+      DType top_left_v = 0;
+      DType top_right_v = 0;
+      int top_left_x = static_cast<int>(floor(x_fake));
+      int top_left_y = static_cast<int>(floor(y_fake));
+      DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+      //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+      int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+      top_left_v = *(data + data_index );
+      top_right_v = *(data + data_index  + 1);
+      *(out+out_index) =  top_left_v*( top_left_x_w) + top_right_v * (1.0 - top_left_x_w);
+    }
   }
 }
 
@@ -94,66 +164,215 @@ __global__ void BilinearSamplerBackwardKernel(const int i_c, const int i_h,
     int w = index % o_w;
     int h = (index / o_w) % o_h;
     int n = index / o_w / o_h;
+    
+    
     DType top_left_y_gw = 0.0;
     DType top_left_x_gw = 0.0;
     int grid_src_index = n * o_h * o_w * 2 + h * o_w + w;
-    DType y_real = (*(grid_src + grid_src_index + o_h * o_w) + 1) * (i_h - 1) / 2;
-    DType x_real = (*(grid_src + grid_src_index) + 1) * (i_w - 1) / 2;
-
-    int top_left_y = static_cast<int>(floor(y_real));
-    int top_left_x = static_cast<int>(floor(x_real));
-    DType top_left_y_w = 1.0 - (y_real - top_left_y);
-    DType top_left_x_w = 1.0 - (x_real - top_left_x);
-    for (int c = 0; c < o_c; ++c) {
-      int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
-      int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
-      // calc 4 vertex value in input data
-      DType top_left_v = 0;
+    //DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h ) / 2;
+    DType y_real = (*(grid_src + grid_src_index + o_h * o_w) + 1) * (i_h ) / 2;
+    DType x_real = (*(grid_src + grid_src_index) + 1) * (i_w ) / 2;
+    DType y_fake = y_real - 0.5;
+    DType x_fake = x_real - 0.5;
+    int top_left_y = static_cast<int>(floor(y_fake));
+    int top_left_x = static_cast<int>(floor(x_fake));
+    DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+    DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+    if (between(x_fake, 0, i_w-1) && between(y_fake, 0, i_h-1)){
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        // calc 4 vertex value in input data
+        DType top_left_v = 0;
+        DType top_right_v = 0;
+        DType bottom_left_v = 0;
+        DType bottom_right_v = 0;
+        // calc input grad
+        if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1)) {
+          if (Req1 != mxnet::kNullOp) {
+            atomicAdd (&g_input[data_index], *(grad + grad_index) * top_left_y_w * top_left_x_w);
+          }
+          top_left_v = *(data + data_index);
+        }
+        if (between(top_left_x+1, 0, i_w-1) && between(top_left_y, 0, i_h-1)) {
+          if (Req1 != mxnet::kNullOp) {
+            atomicAdd(&g_input[data_index + 1],
+              *(grad + grad_index) * top_left_y_w * (1.0 - top_left_x_w));
+          }
+          top_right_v = *(data + data_index + 1);
+        }
+        if (between(top_left_x, 0, i_w-1) && between(top_left_y+1, 0, i_h-1)) {
+          if (Req1 != mxnet::kNullOp) {
+            atomicAdd(&g_input[data_index+ i_w],
+              *(grad + grad_index) * (1.0 - top_left_y_w) * top_left_x_w);
+          }
+          bottom_left_v = *(data + data_index + i_w);
+        }
+        if (between(top_left_x+1, 0, i_w-1) && between(top_left_y+1, 0, i_h-1)) {
+          if (Req1 != mxnet::kNullOp) {
+            atomicAdd(&g_input[data_index+ i_w + 1],*(grad + grad_index) * (1.0 - top_left_y_w) * (1.0 - top_left_x_w));
+          }
+          bottom_right_v = *(data + data_index + i_w + 1);
+        }
+        // calc weight grad of top_left_w, then multiple -1 is the grad of grid_src
+        top_left_y_gw -= *(grad + grad_index) * (top_right_v - bottom_right_v +
+                          (top_left_v - top_right_v - bottom_left_v + bottom_right_v)
+                          * top_left_x_w);
+        top_left_x_gw -= *(grad + grad_index) * (bottom_left_v - bottom_right_v +
+                          (top_left_v - top_right_v - bottom_left_v + bottom_right_v)
+                          * top_left_y_w);
+      }
+      if (Req2 != mxnet::kNullOp) {
+        // calc grad of grid
+        *(grad_grid + grid_src_index + o_h * o_w) += top_left_y_gw * (i_h ) / 2;
+        *(grad_grid + grid_src_index) += top_left_x_gw * (i_w ) / 2;
+      }
+    else if (x_fake <= 0  &&  y_fake <= 0){
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + 0;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        // calc input grad
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index], *(grad + grad_index)); 
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+        }
+      }
+    else if (x_fake >= (i_w -1)  &&  y_fake <= 0){
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + i_w -1 ;
+        // calc input grad
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index], *(grad + grad_index) );
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+        }
+    }
+    else if (x_fake >= (i_w -1)  &&  y_fake >=(i_h -1)){
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1) * i_w + i_w -1 ;
+        // calc input grad
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[ data_index] , *(grad + grad_index)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+        }
+    }
+    else if (x_fake <= 0  &&  y_fake >=(i_h - 1 )){
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        //int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1 ) * i_w + 0;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        // calc input grad
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index] , *(grad + grad_index)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+        }
+    }
+    else if (x_fake <= 0  ){
       DType top_right_v = 0;
+      DType bottom_right_v = 0;
+      int top_left_y = static_cast<int>(floor(y_fake));
+      DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w ;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index], *(grad + grad_index)*( top_left_y_w)) ;
+          atomicAdd(&g_input[data_index+ i_w], *(grad + grad_index)*( 1.0 - top_left_y_w)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+      }
+    }
+    else if (y_fake <= 0  ){
       DType bottom_left_v = 0;
       DType bottom_right_v = 0;
-      // calc input grad
-      if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1)) {
+      int top_left_x = static_cast<int>(floor(x_fake));
+      DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
         if (Req1 != mxnet::kNullOp) {
-          atomicAdd(&g_input[data_index], *(grad + grad_index) * top_left_y_w * top_left_x_w);
-        }
-        top_left_v = *(data + data_index);
+          atomicAdd(&g_input)[data_index] , *(grad + grad_index)*( top_left_x_w)) ;
+          atomicAdd(&g_input)[data_index+ 1] , *(grad + grad_index)*( 1.0 - top_left_x_w)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
       }
-      if (between(top_left_x+1, 0, i_w-1) && between(top_left_y, 0, i_h-1)) {
-        if (Req1 != mxnet::kNullOp) {
-          atomicAdd(&g_input[data_index + 1],
-                    *(grad + grad_index) * top_left_y_w * (1.0 - top_left_x_w));
-        }
-        top_right_v = *(data + data_index + 1);
-      }
-      if (between(top_left_x, 0, i_w-1) && between(top_left_y+1, 0, i_h-1)) {
-        if (Req1 != mxnet::kNullOp) {
-          atomicAdd(&g_input[data_index+ i_w],
-                    *(grad + grad_index) * (1.0 - top_left_y_w) * top_left_x_w);
-        }
-        bottom_left_v = *(data + data_index + i_w);
-      }
-      if (between(top_left_x+1, 0, i_w-1) && between(top_left_y+1, 0, i_h-1)) {
-        if (Req1 != mxnet::kNullOp) {
-          atomicAdd(&g_input[data_index+ i_w + 1],
-                    *(grad + grad_index) * (1.0 - top_left_y_w) * (1.0 - top_left_x_w));
-        }
-        bottom_right_v = *(data + data_index + i_w + 1);
-      }
-      // calc weight grad of top_left_w, then multiple -1 is the grad of grid_src
-      top_left_y_gw -= *(grad + grad_index) * (top_right_v - bottom_right_v +
-                        (top_left_v - top_right_v - bottom_left_v + bottom_right_v)
-                        * top_left_x_w);
-      top_left_x_gw -= *(grad + grad_index) * (bottom_left_v - bottom_right_v +
-                        (top_left_v - top_right_v - bottom_left_v + bottom_right_v)
-                        * top_left_y_w);
     }
-    if (Req2 != mxnet::kNullOp) {
-      // calc grad of grid
-      *(grad_grid + grid_src_index + o_h * o_w) += top_left_y_gw * (i_h - 1) / 2;
-      *(grad_grid + grid_src_index) += top_left_x_gw * (i_w - 1) / 2;
+    else if (x_fake >= i_w -1  ){
+      DType top_left_v = 0;
+      DType bottom_left_v = 0;
+      int top_left_y = static_cast<int>(floor(y_fake));
+      int top_left_x = static_cast<int>(floor(x_fake));
+      DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+      //right = left
+      
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index] , *(grad + grad_index)*( top_left_y_w) );
+          atomicAdd(&g_input[data_index+ i_w] ,*(grad + grad_index)*( 1.0 - top_left_y_w)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+          }
+      }
     }
-  }
+    else if (y_fake >= i_h -1  ){
+      DType top_left_v = 0;
+      DType top_right_v = 0;
+      int top_left_x = static_cast<int>(floor(x_fake));
+      int top_left_y = static_cast<int>(floor(y_fake));
+      DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+      //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+      for (int c = 0; c < static_cast<int>(o_c); ++c) {
+        int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+        int grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
+        if (Req1 != mxnet::kNullOp) {
+          atomicAdd(&g_input[data_index],*(grad + grad_index)*( top_left_x_w)) ;
+          atomicAdd(&g_input[data_index+ 1] ,*(grad + grad_index)*( 1.0 - top_left_x_w)) ;
+          }
+        if (Req2 != mxnet::kNullOp) {
+          // ignore grad of grid
+          *(grad_grid + grid_src_index + o_h * o_w) +=  0;
+          *(grad_grid + grid_src_index) +=  0;
+                }
+            }
+          }
+  
 }
 }  // namespace cuda
 
