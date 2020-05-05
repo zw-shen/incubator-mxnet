@@ -46,30 +46,98 @@ inline void BilinearSamplerForward(const Tensor<cpu, 4, DType> &output,
         for (index_t w = 0; w < static_cast<index_t>(o_w); ++w) {
           index_t out_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
           index_t grid_index = n * o_h * o_w * 2 + h * o_w + w;
-          DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h - 1) / 2;
-          DType x_real = (*(grid + grid_index) + 1) * (i_w - 1) / 2;
-          int top_left_y = static_cast<int>(floor(y_real));
-          int top_left_x = static_cast<int>(floor(x_real));
-          DType top_left_y_w = 1.0 - (y_real - top_left_y);
-          DType top_left_x_w = 1.0 - (x_real - top_left_x);
-          int data_index = n * i_c * i_h * i_w + c * i_h * i_w +
-            top_left_y * i_w + top_left_x;
-          DType top_left_v = 0;
-          DType top_right_v = 0;
-          DType bottom_left_v = 0;
-          DType bottom_right_v = 0;
-          if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1))
-            top_left_v = *(data + data_index);
-          if (between(top_left_x + 1, 0, i_w-1) && between(top_left_y, 0, i_h-1))
-            top_right_v = *(data + data_index + 1);
-          if (between(top_left_x, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
-            bottom_left_v = *(data + data_index + i_w);
-          if (between(top_left_x+1, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
-            bottom_right_v = *(data + data_index + i_w + 1);
-          *(out+out_index) = top_left_v * top_left_y_w * top_left_x_w +
-                              top_right_v * top_left_y_w * (1.0 - top_left_x_w) +
-                              bottom_left_v * (1.0 - top_left_y_w) * top_left_x_w +
-                              bottom_right_v * (1.0 - top_left_y_w) * (1.0 - top_left_x_w);
+          // x y real between 0 w or h
+          DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h ) / 2;
+          DType x_real = (*(grid + grid_index) + 1) * (i_w ) / 2;
+          DType y_fake = y_real - 0.5;
+          DType x_fake = x_real - 0.5;
+          // x real >=0.5 and <= w-0.5
+          if (between(x_fake, 0, i_w-1) && between(y_fake, 0, i_h-1)){
+            int top_left_y = static_cast<int>(floor(y_fake));
+            int top_left_x = static_cast<int>(floor(x_fake));
+            DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+            DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +
+              top_left_y * i_w + top_left_x;
+            DType top_left_v = 0;
+            DType top_right_v = 0;
+            DType bottom_left_v = 0;
+            DType bottom_right_v = 0;
+            if (between(top_left_x, 0, i_w-1) && between(top_left_y, 0, i_h-1))
+              top_left_v = *(data + data_index);
+            if (between(top_left_x + 1, 0, i_w-1) && between(top_left_y, 0, i_h-1))
+              top_right_v = *(data + data_index + 1);
+            if (between(top_left_x, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
+              bottom_left_v = *(data + data_index + i_w);
+            if (between(top_left_x+1, 0, i_w-1) && between(top_left_y + 1, 0, i_h-1))
+              bottom_right_v = *(data + data_index + i_w + 1);
+            *(out+out_index) = top_left_v * top_left_y_w * top_left_x_w +
+                                top_right_v * top_left_y_w * (1.0 - top_left_x_w) +
+                                bottom_left_v * (1.0 - top_left_y_w) * top_left_x_w +
+                                bottom_right_v * (1.0 - top_left_y_w) * (1.0 - top_left_x_w); 
+          }
+          else if (x_fake <= 0  &&  y_fake <= 0){
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + 0;
+            *(out+out_index) = *(data + data_index); 
+          }
+          else if (x_fake >= (i_w -1)  &&  y_fake <= 0){
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +0 * i_w + i_w -1 ;
+            *(out+out_index) = *(data + data_index) ;
+          }
+          else if (x_fake >= (i_w -1)  &&  y_fake >=(i_h -1)){
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1) * i_w + i_w -1 ;
+            *(out+out_index) = *(data + data_index) ;
+          }
+          else if (x_fake <= 0  &&  y_fake >=(i_h - 1 )){
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +(i_h - 1 ) * i_w + 0;
+            *(out+out_index) = *(data + data_index) ;
+          }
+          else if (x_fake <= 0  ){
+            DType top_right_v = 0;
+            DType bottom_right_v = 0;
+            int top_left_y = static_cast<int>(floor(y_fake));
+            DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +
+              top_left_y * i_w ;
+            top_right_v = *(data + data_index );
+            bottom_right_v = *(data + data_index + i_w );
+            *(out+out_index) = top_right_v * ( top_left_y_w) +bottom_right_v * (1.0 - top_left_y_w); 
+          }
+          else if (y_fake <= 0  ){
+            DType bottom_left_v = 0;
+            DType bottom_right_v = 0;
+            int top_left_x = static_cast<int>(floor(x_fake));
+            DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_x;
+            bottom_left_v = *(data + data_index );
+            bottom_right_v = *(data + data_index  + 1);
+            *(out+out_index) =  bottom_left_v*(top_left_x_w) + bottom_right_v *(1.0 - top_left_x_w);
+          }
+          else if (x_fake >= i_w -1  ){
+            DType top_left_v = 0;
+            DType bottom_left_v = 0;
+            int top_left_y = static_cast<int>(floor(y_fake));
+            int top_left_x = static_cast<int>(floor(x_fake));
+            DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+            //right = left
+            //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+            top_left_v = *(data + data_index );
+            bottom_left_v = *(data + data_index  + i_w);
+            *(out+out_index) =  bottom_left_v*(1.0 - top_left_y_w) + top_left_v * ( top_left_y_w);
+          }
+          else if (y_fake >= i_h -1  ){
+            DType top_left_v = 0;
+            DType top_right_v = 0;
+            int top_left_x = static_cast<int>(floor(x_fake));
+            int top_left_y = static_cast<int>(floor(y_fake));
+            DType top_left_x_w = 1.0 - (x_fake - top_left_x);
+            //int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+            int data_index = n * i_c * i_h * i_w + c * i_h * i_w +top_left_y * i_w + top_left_x;
+            top_left_v = *(data + data_index );
+            top_right_v = *(data + data_index  + 1);
+            *(out+out_index) =  top_left_v*( top_left_x_w) + top_right_v * (1.0 - top_left_x_w);
+          }
         }
       }
     }
@@ -98,12 +166,15 @@ inline void BilinearSamplerBackward(const Tensor<cpu, 4, DType> &gdata,
           DType top_left_y_gw = 0.0;
           DType top_left_x_gw = 0.0;
           index_t grid_src_index = n * o_h * o_w * 2 + h * o_w + w;
-          DType y_real = (*(grid_src + grid_src_index + o_h * o_w) + 1) * (i_h - 1) / 2;
-          DType x_real = (*(grid_src + grid_src_index) + 1) * (i_w - 1) / 2;
-          int top_left_y = static_cast<int>(floor(y_real));
-          int top_left_x = static_cast<int>(floor(x_real));
-          DType top_left_y_w = 1.0 - (y_real - top_left_y);
-          DType top_left_x_w = 1.0 - (x_real - top_left_x);
+          //DType y_real = (*(grid + grid_index + o_h * o_w) + 1) * (i_h ) / 2;
+          DType y_real = (*(grid_src + grid_src_index + o_h * o_w) + 1) * (i_h ) / 2;
+          DType x_real = (*(grid_src + grid_src_index) + 1) * (i_w ) / 2;
+          DType y_fake = y_real - 0.5;
+          DType x_fake = x_real - 0.5;
+          int top_left_y = static_cast<int>(floor(y_fake));
+          int top_left_x = static_cast<int>(floor(x_fake));
+          DType top_left_y_w = 1.0 - (y_fake - top_left_y);
+          DType top_left_x_w = 1.0 - (x_fake - top_left_x);
           for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
             index_t grad_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
             int data_index = n * i_c * i_h * i_w + c * i_h * i_w + top_left_y * i_w + top_left_x;
