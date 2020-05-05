@@ -44,6 +44,7 @@ inline void BilinearSamplerForward(const Tensor<cpu, 4, DType> &output,
     for (index_t c = 0; c < static_cast<index_t>(o_c); ++c) {
       for (index_t h = 0; h < static_cast<index_t>(o_h); ++h) {
         for (index_t w = 0; w < static_cast<index_t>(o_w); ++w) {
+          //printf("test---cpu");
           index_t out_index = n * o_c * o_h * o_w + c * o_h * o_w + h * o_w + w;
           index_t grid_index = n * o_h * o_w * 2 + h * o_w + w;
           // x y real between 0 w or h
